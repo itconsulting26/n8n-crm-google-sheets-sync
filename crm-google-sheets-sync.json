@@ -1,0 +1,605 @@
+{
+  "name": "CRM (HubSpot) <> Google Sheets sync",
+  "nodes": [
+    {
+      "id": "06521677-90f5-4ea2-931e-0b42e3108f69",
+      "name": "Every hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "24aea2c3-a85f-4066-9a2d-0da57b9dc0b6",
+      "name": "Get recently updated HubSpot contacts",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.2,
+      "position": [
+        224,
+        0
+      ],
+      "parameters": {
+        "resource": "contact",
+        "operation": "getRecentlyCreatedUpdated",
+        "authentication": "appToken",
+        "returnAll": true,
+        "additionalFields": {
+          "formSubmissionMode": "none",
+          "listMemberships": false,
+          "propertiesCollection": {
+            "propertiesValues": {
+              "properties": [
+                "email",
+                "firstname",
+                "lastname",
+                "phone",
+                "company"
+              ],
+              "propertyMode": "valueOnly"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "6ee9910d-10dc-4f55-986c-a16d996eb3c3",
+      "name": "Map HubSpot contact to sheet row",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        448,
+        0
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "hubspot_id",
+              "value": "={{ String($json.vid ?? $json[\"canonical-vid\"] ?? \"\") }}",
+              "type": "string"
+            },
+            {
+              "id": "a2",
+              "name": "email",
+              "value": "={{ ($json.properties?.email?.value || ($json[\"identity-profiles\"]?.[0]?.identities || []).find(i => i.type === \"EMAIL\")?.value || \"\").toLowerCase().trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "a3",
+              "name": "first_name",
+              "value": "={{ $json.properties?.firstname?.value || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a4",
+              "name": "last_name",
+              "value": "={{ $json.properties?.lastname?.value || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a5",
+              "name": "phone",
+              "value": "={{ $json.properties?.phone?.value || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a6",
+              "name": "company",
+              "value": "={{ $json.properties?.company?.value || \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "a7",
+              "name": "source",
+              "value": "hubspot",
+              "type": "string"
+            },
+            {
+              "id": "a8",
+              "name": "last_synced",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "b1819fec-1390-4a66-b497-03adf63691ae",
+      "name": "Keep contacts with an email",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        672,
+        0
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "703920bc-3480-4e94-822b-ada4f0f044cf",
+      "name": "Add or update row in Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        896,
+        0
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "authentication": "oAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "CRM Contacts"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "hubspot_id": "={{ $json.hubspot_id }}",
+            "email": "={{ $json.email }}",
+            "first_name": "={{ $json.first_name }}",
+            "last_name": "={{ $json.last_name }}",
+            "phone": "={{ $json.phone }}",
+            "company": "={{ $json.company }}",
+            "source": "={{ $json.source }}",
+            "last_synced": "={{ $json.last_synced }}"
+          },
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": [
+            {
+              "id": "hubspot_id",
+              "displayName": "hubspot_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_name",
+              "displayName": "last_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_synced",
+              "displayName": "last_synced",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "64fbe50d-3e0c-407c-97dd-7f9c5f426a7f",
+      "name": "New row in Google Sheets",
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyX",
+              "value": 5,
+              "unit": "minutes"
+            }
+          ]
+        },
+        "authentication": "triggerOAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "CRM Contacts"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Contacts"
+        },
+        "event": "rowAdded",
+        "options": {}
+      }
+    },
+    {
+      "id": "5f33da5d-0411-4414-956d-cb46a73851f1",
+      "name": "Only rows not yet in HubSpot",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        224,
+        400
+      ],
+      "parameters": {
+        "conditions": {
+          "combinator": "and",
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            },
+            {
+              "leftValue": "={{ $json.hubspot_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "empty",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "bf0f7ed9-d6ed-4254-a7d8-c509977f577c",
+      "name": "Create or update HubSpot contact",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        400
+      ],
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "authentication": "appToken",
+        "email": "={{ String($json.email).toLowerCase().trim() }}",
+        "additionalFields": {
+          "firstName": "={{ $json.first_name || \"\" }}",
+          "lastName": "={{ $json.last_name || \"\" }}",
+          "phoneNumber": "={{ $json.phone || \"\" }}",
+          "companyName": "={{ $json.company || \"\" }}"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "c5558ee9-413c-4162-a895-add01badc4a9",
+      "name": "Save HubSpot ID back to the sheet",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        672,
+        400
+      ],
+      "parameters": {
+        "resource": "sheet",
+        "operation": "appendOrUpdate",
+        "authentication": "oAuth2",
+        "documentId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "CRM Contacts"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "list",
+          "value": "",
+          "cachedResultName": "Contacts"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "email": "={{ String($(\"Only rows not yet in HubSpot\").item.json.email).toLowerCase().trim() }}",
+            "hubspot_id": "={{ String($json.vid) }}",
+            "source": "sheet",
+            "last_synced": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "email"
+          ],
+          "schema": [
+            {
+              "id": "hubspot_id",
+              "displayName": "hubspot_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "email",
+              "displayName": "email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "first_name",
+              "displayName": "first_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_name",
+              "displayName": "last_name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "phone",
+              "displayName": "phone",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "company",
+              "displayName": "company",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "source",
+              "displayName": "source",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "last_synced",
+              "displayName": "last_synced",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "0e5097b5-3e27-46b2-b4b6-5300f3d88992",
+      "name": "Note: HubSpot to Sheets",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        -200
+      ],
+      "parameters": {
+        "content": "## HubSpot to Google Sheets\nEvery hour, contacts created or updated in HubSpot are added to the sheet, or their row is updated (matched by email).",
+        "width": 1180,
+        "height": 340,
+        "color": 4
+      }
+    },
+    {
+      "id": "74a459c8-7ec6-47d9-af0a-a9f7729509c6",
+      "name": "Note: Sheets to HubSpot",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        200
+      ],
+      "parameters": {
+        "content": "## Google Sheets to HubSpot\nEvery 5 minutes, new rows typed in the sheet (email filled, hubspot_id empty) are created or updated in HubSpot, then the HubSpot ID is written back to the row so it is never sent twice.",
+        "width": 960,
+        "height": 340,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Every hour": {
+      "main": [
+        [
+          {
+            "node": "Get recently updated HubSpot contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get recently updated HubSpot contacts": {
+      "main": [
+        [
+          {
+            "node": "Map HubSpot contact to sheet row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map HubSpot contact to sheet row": {
+      "main": [
+        [
+          {
+            "node": "Keep contacts with an email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep contacts with an email": {
+      "main": [
+        [
+          {
+            "node": "Add or update row in Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New row in Google Sheets": {
+      "main": [
+        [
+          {
+            "node": "Only rows not yet in HubSpot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Only rows not yet in HubSpot": {
+      "main": [
+        [
+          {
+            "node": "Create or update HubSpot contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or update HubSpot contact": {
+      "main": [
+        [
+          {
+            "node": "Save HubSpot ID back to the sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  }
+}
